@@ -1,0 +1,78 @@
+- hosts: all
+  become: true
+  tasks:
+  - name: Update apt cache
+    apt:
+      update_cache: yes
+
+  - name: Install Apache, MySQL, and PHP
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+    - apache2
+    - mysql-server
+    - php
+    - libapache2-mod-php
+    - php-mysql
+    - python-mysqldb
+
+  - name: Create Wordpress database
+    mysql_db:
+      name: wordpress
+      state: present
+    become_user: root
+    become_method: sudo
+
+  - name: Create Wordpress database user
+    mysql_user:
+      name: wpuser
+      password: wppassword
+      priv: "wordpress.*:ALL"
+      host: localhost
+      state: present
+    become_user: root
+    become_method: sudo
+
+  - name: Download and install Wordpress
+    get_url:
+      url: https://wordpress.org/latest.tar.gz
+      dest: /tmp/wordpress.tar.gz
+    register: wordpress
+
+  - name: Extract Wordpress archive
+    unarchive:
+      src: "{{ wordpress.dest }}"
+      dest: /var/www/html
+      remote_src: yes
+      owner: www-data
+      group: www-data
+
+  - name: Set Wordpress permissions
+    file:
+      path: /var/www/html/wordpress
+      owner: www-data
+      group: www-data
+      recurse: yes
+
+  - name: Configure Wordpress
+    copy:
+      src: wp-config.php
+      dest: /var/www/html/wordpress
+      owner: www-data
+      group: www-data
+    become_user: root
+    become_method: sudo
+
+  - name: Enable Apache mod_rewrite
+    apache2_module:
+      name: rewrite
+      state: present
+    become_user: root
+    become_method: sudo
+
+  - name: Restart Apache
+    service:
+      name: apache2
+      state: restarted
+
